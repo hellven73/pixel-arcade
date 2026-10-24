@@ -1,6 +1,6 @@
 # Pixel Arcade
 
-A browser arcade with original game links, embedded games, custom HTML uploads, chess bots, a scientific calculator, music and Discord community links.
+A browser arcade with original game links, embedded games, custom HTML uploads, chess bots, a scientific calculator, music and built-in community chat.
 
 ## Hosting on GitHub Pages
 
@@ -14,15 +14,13 @@ The ready-to-publish site is in the repository root. No Node install or build st
 
 Works at both a project path (`https://USERNAME.github.io/pixel-arcade/`) and a user-site root (`https://USERNAME.github.io/`). URL availability is determined by the GitHub account and repository name.
 
-## Server-backed features
+## Application services
 
-GitHub Pages serves static files. This migration keeps account sign-in, account playtime/stats, live Pixel Chat and the password-protected TV player on the existing hosted service:
+Every application screen is served by this GitHub Pages repository. Accounts, profiles, shared playtime, chat servers/channels and the developer TV gate use authenticated calls from api-client.js to the Pixel service backend; visitors are not redirected to another arcade site. Existing accounts and chat data remain intact.
 
-https://pixel-arcade-wg-1023.aquapine16.chatgpt.site
+GitHub Pages cannot execute a server or database. The service runs separately with the existing database, using an exact GitHub-origin allowlist and short-lived bearer sessions. It never accepts the hosted site's cookie as a GitHub session. No private token, password hash or runtime secret is shipped in this repository. The portable backend implementation and SQL schema are included in backend-worker.ts and backend-schema.sql; see BACKEND.md.
 
-The Pages interface links to those features explicitly. It does not fake login or store the developer password in public source. No account database, password hash, token or runtime secret is included in this repository. The existing service must remain online to use these features.
-
-Gameplay on Pages does not sync account playtime. Chess games, favourites, notes and custom uploaded games are saved locally for the Pages origin. Browser data from the old hostname cannot transfer automatically; the old site and its browser-local data remain available there. External embedded games keep their own saves and availability.
+Games, media, external browsing and general AI still use their providers inside the interface. The AI provider's own sign-in popup remains necessary. Pages includes no outgoing alternative-site links such as “Open Calculator 2”.
 
 ## Updating the site
 

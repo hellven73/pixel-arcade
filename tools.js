@@ -1,5 +1,5 @@
 import './chess-app.js';
-import './ai-chat.js';
+import './ai-chat.js?v=2';
 const tools=[{id:'ai',name:'Pixel AI',icon:'✦',detail:'Ask questions, explore ideas and get help with real AI.'},{id:'community',name:'Pixel Chat',icon:'💬',detail:'Invite your friends. Create servers, channels and conversations.'},{id:'calculator',name:'Calculator',icon:'🧮',detail:'Scientific maths, graphs, equations, statistics and conversions.'},{id:'chess',name:'Chess Club',icon:'♞',detail:'Four bot personalities. Pick your side and find your next move.'}];
 const baseShowSection=showSection;
 showSection=function(next){const tool=tools.some(t=>t.id===next);baseShowSection(tool?'home':next);for(const t of tools)document.querySelector('#'+t.id+'-page').hidden=next!==t.id;if(tool){section=next;document.body.dataset.section=next;document.querySelector('#home-page').hidden=true;document.querySelectorAll('.side-link').forEach(b=>b.classList.toggle('active',b.dataset.section===next));history.replaceState(null,'','#'+next);if(next==='ai')window.pixelAI.show();if(next==='community')window.pixelCommunity.show();if(next==='chess')window.pixelChess.show()}};
