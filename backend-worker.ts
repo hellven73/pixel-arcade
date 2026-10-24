@@ -1,5 +1,6 @@
-// Portable Pixel API Worker. Generated from the tested service routes. No secrets are included.
-// Bind a D1 database as DB and configure FRAMEX_PASSWORD_HASH, FRAMEX_PASSWORD_SALT, FRAMEX_SESSION_KEY.
+// Portable Pixel API Worker. No secrets are included.
+// Bind D1 as DB. Optional admin setting: PIXEL_ADMIN_USERNAME.
+// Developer TV secrets: FRAMEX_PASSWORD_HASH, FRAMEX_PASSWORD_SALT, FRAMEX_SESSION_KEY.
 // Only the owner's GitHub Pages origin may use browser bearer sessions.
 const GITHUB_ORIGIN='https://hellven73.github.io';
 function githubClient(req:Request){return req.headers.get('origin')===GITHUB_ORIGIN&&req.headers.get('x-pixel-client')==='github-pages'}
@@ -21,8 +22,13 @@ async function passwordHash(password:string,salt:string){const key=await crypto.
 function equal(a:string,b:string){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
 function tokenFrom(req:Request){if(githubClient(req)){const match=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.get('authorization')||'');return match?.[1]||null;}const name=cookieName(req);const value=(req.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='))?.slice(name.length+1);return value&&/^[a-f0-9]{64}$/.test(value)?value:null}
 async function getAccount(req:Request){const token=tokenFrom(req);if(!token)return null;return env.DB!.prepare('SELECT a.user_id AS userId,a.username FROM account_tokens t JOIN arcade_accounts a ON a.user_id=t.user_id WHERE t.token_hash=? AND t.expires_at>?').bind(await digest(token),Date.now()).first<{userId:string;username:string}>()}
-async function limited(req:Request,action:string,username=''){const ip=req.headers.get('cf-connecting-ip')||'local-preview';const key=await digest(action+':'+ip+':'+username),now=Date.now(),max=action==='register'?6:action==='chat-typing'?600:action==='chat-send'?180:action.startsWith('chat-')?90:15;await env.DB!.prepare('INSERT INTO auth_limits(key,attempts,resets_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN resets_at<=? THEN 1 ELSE attempts+1 END,resets_at=CASE WHEN resets_at<=? THEN excluded.resets_at ELSE resets_at END').bind(key,now+15*60*1000,now,now).run();const row=await env.DB!.prepare('SELECT attempts FROM auth_limits WHERE key=?').bind(key).first<{attempts:number}>();return (row?.attempts||0)>max}
+async function limited(req:Request,action:string,username=''){const ip=req.headers.get('cf-connecting-ip')||'local-preview';const key=await digest(action+':'+ip+':'+username),now=Date.now(),max=action==='activity'?240:action==='register'?6:action==='chat-typing'?600:action==='chat-send'?180:action.startsWith('chat-')?90:15;await env.DB!.prepare('INSERT INTO auth_limits(key,attempts,resets_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN resets_at<=? THEN 1 ELSE attempts+1 END,resets_at=CASE WHEN resets_at<=? THEN excluded.resets_at ELSE resets_at END').bind(key,now+15*60*1000,now,now).run();const row=await env.DB!.prepare('SELECT attempts FROM auth_limits WHERE key=?').bind(key).first<{attempts:number}>();return (row?.attempts||0)>max}
 async function parseBody(req:Request){if(!(req.headers.get('content-type')||'').startsWith('application/json'))return null;const value=await req.text();if(value.length>4096)return null;try{return JSON.parse(value)}catch{return null}}
+
+function isAdmin(user:{username:string}|null){const configured=String((env as unknown as Record<string,string>).PIXEL_ADMIN_USERNAME||'').trim().toLowerCase();return !!user&&/^[a-z0-9_]{3,24}$/.test(configured)&&user.username===configured}
+const PUBLIC_LOBBY_ID='pixel-public-lobby';
+const PUBLIC_CHANNEL_ID='pixel-public-general';
+async function ensurePublicLobby(user:{userId:string}){const joined=await env.DB!.prepare('SELECT id FROM chat_members WHERE server=? AND user=?').bind(PUBLIC_LOBBY_ID,user.userId).first();if(joined)return;await env.DB!.batch([env.DB!.prepare('INSERT OR IGNORE INTO chat_servers(id,name,owner,invite) VALUES(?,?,?,?)').bind(PUBLIC_LOBBY_ID,'Pixel Community','system:public-lobby','public-lobby-not-an-invite'),env.DB!.prepare('INSERT OR IGNORE INTO chat_channels(id,server,name) VALUES(?,?,?)').bind(PUBLIC_CHANNEL_ID,PUBLIC_LOBBY_ID,'general'),env.DB!.prepare('INSERT OR IGNORE INTO chat_members(id,server,user,seen,typing) VALUES(?,?,?,?,NULL)').bind(PUBLIC_LOBBY_ID+':'+user.userId,PUBLIC_LOBBY_ID,user.userId,Date.now())])}
 
 const routes:any={'/api/auth/login':(()=>{
 async function POST(req:Request){
@@ -45,7 +51,7 @@ async function POST(req:Request){
  if(!sameOrigin(req))return json({error:'Invalid origin.'},403);
  const b=await parseBody(req);const username=typeof b?.username==='string'?b.username.trim().toLowerCase():'';const password=b?.password;
  if(!/^[a-z0-9_]{3,24}$/.test(username))return json({error:'Use 3–24 letters, numbers or underscores for your username.'},400);
- if(typeof password!=='string'||password.length<12||password.length>128)return json({error:'Use a password with 12–128 characters.'},400);
+ if(typeof password!=='string'||password.length<7||password.length>128)return json({error:'Use a password with 7–128 characters.'},400);
  if(await limited(req,'register'))return json({error:'Too many sign-up attempts. Try again in 15 minutes.'},429);
  const existing=await env.DB!.prepare('SELECT user_id FROM arcade_accounts WHERE username=?').bind(username).first();if(existing)return json({error:'That username is taken. Choose another.'},409);
  const userId='arcade:'+crypto.randomUUID(),salt=randomHex(16),hash=await passwordHash(password,salt),now=Date.now(),token=randomHex();
@@ -68,9 +74,9 @@ const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache
 async function GET(req:Request){
  const user=await getAccount(req);if(!user)return json({authenticated:false},401);
  const profile=await env.DB!.prepare('SELECT name, created_at FROM players WHERE user_id=?').bind(user.userId).first();
- if(!profile)return json({authenticated:true,profile:null});
+ if(!profile)return json({authenticated:true,isAdmin:isAdmin(user),profile:null});
  const stats=await env.DB!.prepare('SELECT game_id, MAX(game_name) AS game_name, SUM(seconds) AS seconds, COUNT(*) AS sessions, MAX(created_at) AS last_played FROM sessions WHERE user_id=? GROUP BY game_id ORDER BY seconds DESC').bind(user.userId).all();
- return json({authenticated:true,profile,username:user.username,stats:stats.results});
+ return json({authenticated:true,isAdmin:isAdmin(user),profile,username:user.username,stats:stats.results});
 }
 async function POST(req:Request){
  const user=await getAccount(req);if(!user)return json({error:'Log in to your arcade account first.'},401);
@@ -84,7 +90,7 @@ async function POST(req:Request){
 return {GET,POST};})(),
 '/api/session':(()=>{
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
-const allowed=new Set(['snake','breakout','pong','flap','dodge','runner','invaders','2048','memory','mines','ttt','connect','reaction','aim','lights','slide','simon','typing','minecraft262','bitlife','gta-vice-city',...Array.from({length:29},(_,i)=>'original-'+i)]);
+const allowed=new Set(['snake','breakout','pong','flap','dodge','runner','invaders','2048','memory','mines','ttt','connect','reaction','aim','lights','slide','simon','typing','minecraft262','bitlife','gta-vice-city','gta-san-andreas','falling-blocks','dots-boxes',...Array.from({length:29},(_,i)=>'original-'+i)]);
 async function POST(req:Request){
  const user=await getAccount(req);if(!user)return json({error:'Sign in first.'},401);
  if(!apiOrigin(req))return json({error:'Invalid origin.'},403);
@@ -107,7 +113,7 @@ const db=()=>env.DB!;
 const member=(server:string,user:string)=>db().prepare('SELECT s.* FROM chat_servers s JOIN chat_members m ON m.server=s.id WHERE s.id=? AND m.user=?').bind(server,user).first<any>();
 async function GET(req:Request){
  const user=await getAccount(req);if(!user)return json({error:'Log in to your arcade account to chat.'},401);
- const url=new URL(req.url),server=url.searchParams.get('server'),channel=url.searchParams.get('channel');
+ await ensurePublicLobby(user);const url=new URL(req.url),server=url.searchParams.get('server'),channel=url.searchParams.get('channel');
  const servers=(await db().prepare('SELECT s.id,s.name,s.owner FROM chat_servers s JOIN chat_members m ON m.server=s.id WHERE m.user=? ORDER BY s.name').bind(user.userId).all()).results;
  if(!server)return json({user,servers});const s=await member(server,user.userId);if(!s)return json({error:'Join this server first.'},403);
  await db().prepare('UPDATE chat_members SET seen=? WHERE server=? AND user=?').bind(Date.now(),server,user.userId).run();
@@ -117,17 +123,17 @@ async function GET(req:Request){
  if(channel){if(!channels.some((c:any)=>c.id===channel))return json({error:'Channel not found.'},404);
  const q=(url.searchParams.get('q')||'').slice(0,80);messages=(await db().prepare('SELECT m.*,a.username FROM chat_messages m JOIN arcade_accounts a ON a.user_id=m.author WHERE m.channel=? AND (? = \'\' OR instr(lower(m.body),lower(?))>0) ORDER BY m.created DESC,m.id DESC LIMIT 100').bind(channel,q,q).all()).results.reverse();
  reactions=(await db().prepare('SELECT r.* FROM chat_reactions r JOIN chat_messages m ON r.message=m.id WHERE m.channel=? ORDER BY m.created DESC LIMIT 1000').bind(channel).all()).results;
- }return json({user,servers,server:{...s,invite:s.owner===user.userId?s.invite:undefined},channels,members,messages,reactions});
+ }return json({user,servers,server:{...s,isPublic:s.id===PUBLIC_LOBBY_ID,canModerate:s.owner===user.userId||isAdmin(user),invite:s.owner===user.userId?s.invite:undefined},channels,members,messages,reactions});
 }
 async function POST(req:Request){
  if(!sameOrigin(req))return json({error:'Invalid origin.'},403);const user=await getAccount(req);if(!user)return json({error:'Log in to chat.'},401);
- const b=await parseBody(req);if(!b||typeof b.action!=='string')return json({error:'Invalid request.'},400);
+ await ensurePublicLobby(user);const b=await parseBody(req);if(!b||typeof b.action!=='string')return json({error:'Invalid request.'},400);
  // Separate actions have independent limits; normal polling is read-only.
  if(await limited(req,'chat-'+b.action,user.userId))return json({error:'Slow down a little. Try again in a few minutes.'},429);
  const uid=user.userId,id=crypto.randomUUID(),now=Date.now(),name=typeof b.name==='string'?b.name.trim().slice(0,40):'';
  if(b.action==='create'){if(!name)return json({error:'Name your server.'},400);const count=await db().prepare('SELECT COUNT(*) AS n FROM chat_members WHERE user=?').bind(uid).first<any>();if(count.n>=30)return json({error:'You can join up to 30 servers.'},400);await db().batch([db().prepare('INSERT INTO chat_servers VALUES(?,?,?,?)').bind(id,name,uid,randomHex(16)),db().prepare('INSERT INTO chat_members VALUES(?,?,?,?,NULL)').bind(id+':'+uid,id,uid,now),db().prepare('INSERT INTO chat_channels VALUES(?,?,?)').bind(crypto.randomUUID(),id,'general')]);return json({ok:true,server:id});}
  if(b.action==='join'){if(typeof b.invite!=='string'||!/^[a-f0-9]{32}$/.test(b.invite))return json({error:'Invalid invite code.'},400);const s=await db().prepare('SELECT id FROM chat_servers WHERE invite=?').bind(b.invite).first<any>();if(!s)return json({error:'Invite not found.'},404);const count=await db().prepare('SELECT COUNT(*) AS n FROM chat_members WHERE user=?').bind(uid).first<any>();if(count.n>=30)return json({error:'You can join up to 30 servers.'},400);await db().prepare('INSERT OR IGNORE INTO chat_members VALUES(?,?,?,?,NULL)').bind(s.id+':'+uid,s.id,uid,now).run();return json({ok:true,server:s.id});}
- if(typeof b.server!=='string')return json({error:'Choose a server.'},400);const s=await member(b.server,uid);if(!s)return json({error:'Server access denied.'},403);const owner=s.owner===uid;
+ if(typeof b.server!=='string')return json({error:'Choose a server.'},400);const s=await member(b.server,uid);if(!s)return json({error:'Server access denied.'},403);const owner=s.owner===uid||isAdmin(user);if(s.id===PUBLIC_LOBBY_ID&&['leave','kick','invite'].includes(b.action))return json({error:'The public community lobby is joined automatically and cannot be left or invite-managed.'},403);
  if(b.action==='channel'){if(!owner)return json({error:'Only the server owner can create channels.'},403);if(!name)return json({error:'Name your channel.'},400);await db().prepare('INSERT INTO chat_channels VALUES(?,?,?)').bind(id,s.id,name).run();return json({ok:true,channel:id});}
  if(b.action==='invite'){if(!owner)return json({error:'Owner access required.'},403);await db().prepare('UPDATE chat_servers SET invite=? WHERE id=?').bind(randomHex(16),s.id).run();return json({ok:true});}
  if(b.action==='kick'||b.action==='leave'){const target=b.action==='leave'?uid:b.user;if(typeof target!=='string'||(!owner&&target!==uid)||target===s.owner)return json({error:'Cannot remove this member.'},403);await db().prepare('DELETE FROM chat_members WHERE server=? AND user=?').bind(s.id,target).run();return json({ok:true});}
@@ -153,7 +159,21 @@ async function POST(req:Request){if(!sameOrigin(req))return json({error:'Invalid
 async function DELETE(req:Request){if(!sameOrigin(req))return json({error:'Invalid origin.'},403);return json({ok:true},200,{'Set-Cookie':cookie('',0)})}
 async function GET(req:Request){const allowed=await authorized(req);if(new URL(req.url).searchParams.has('status'))return json({unlocked:allowed});if(!allowed)return new Response('<!doctype html><html><body style="background:#101714;color:#d2f5df;font:18px system-ui;padding:40px"><h1>Developer access required</h1><p>Unlock FrameX TV from the arcade menu first.</p></body></html>',{status:401,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});const html='<!doctype html><html><head><meta name="referrer" content="no-referrer"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;background:#101714}</style></head><body><iframe src="https://framextv.cc/" title="FrameX TV" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe></body></html>';if(githubClient(req))return json({html});return new Response(html,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; frame-src https://framextv.cc; frame-ancestors 'self'",'X-Content-Type-Options':'nosniff'}})}
 
-return {POST,DELETE,GET};})()};
+return {POST,DELETE,GET};})(),
+'/api/admin':(()=>{
+async function GET(req:Request){const user=await getAccount(req);if(!user)return json({error:'Sign in to an administrator account.'},401);if(!isAdmin(user))return json({error:'Administrator access is not enabled for this account.'},403);const now=Date.now(),db=env.DB!;const [totals,accounts,visits,games]=await Promise.all([
+ db.prepare('SELECT (SELECT COUNT(*) FROM arcade_accounts) AS accounts,(SELECT COUNT(*) FROM site_visits WHERE seen_at>?) AS active,(SELECT COUNT(*) FROM site_visits WHERE created_at>?) AS visits24h,(SELECT COUNT(*) FROM chat_messages) AS messages').bind(now-90000,now-86400000).first(),
+ db.prepare('SELECT a.username,a.created_at AS createdAt,p.name AS displayName,(SELECT MAX(v.seen_at) FROM site_visits v WHERE v.user_id=a.user_id) AS lastSeen,(SELECT COALESCE(SUM(s.seconds),0) FROM sessions s WHERE s.user_id=a.user_id) AS playtime FROM arcade_accounts a LEFT JOIN players p ON p.user_id=a.user_id ORDER BY a.created_at DESC LIMIT 200').all(),
+ db.prepare('SELECT v.page,v.created_at AS startedAt,v.seen_at AS lastSeen,a.username FROM site_visits v LEFT JOIN arcade_accounts a ON a.user_id=v.user_id WHERE v.seen_at>? ORDER BY v.seen_at DESC LIMIT 200').bind(now-30*86400000).all(),
+ db.prepare('SELECT game_id AS gameId,MAX(game_name) AS name,COUNT(*) AS sessions,SUM(seconds) AS seconds FROM sessions GROUP BY game_id ORDER BY seconds DESC LIMIT 20').all()]);
+ return json({totals,accounts:accounts.results,visits:visits.results,games:games.results,generatedAt:now,retentionDays:30})}
+
+return {GET};})(),
+'/api/activity':(()=>{
+const pages=new Set(['home','all','mini','big','tv','music','custom','chat','apps','browser','notes','community','calculator','chess','ai','admin']);
+async function POST(req:Request){if(!sameOrigin(req))return json({error:'Invalid origin.'},403);if(await limited(req,'activity'))return json({error:'Too many activity updates.'},429);const b=await parseBody(req);if(!b||typeof b.id!=='string'||!/^[a-f0-9-]{36}$/i.test(b.id)||!pages.has(b.page))return json({error:'Invalid activity.'},400);const user=await getAccount(req),now=Date.now();await env.DB!.prepare('DELETE FROM site_visits WHERE seen_at<?').bind(now-30*86400000).run();await env.DB!.prepare('INSERT INTO site_visits(id,user_id,page,created_at,seen_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET user_id=COALESCE(excluded.user_id,site_visits.user_id),page=excluded.page,seen_at=excluded.seen_at').bind(b.id,user?.userId||null,b.page,now,now).run();return json({ok:true})}
+
+return {POST};})()};
 const path=new URL(request.url).pathname,github=request.headers.get('origin')===GITHUB_ORIGIN;
 if(github&&request.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders()});
 const fn=routes[path]?.[request.method];let response:Response;

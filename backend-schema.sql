@@ -82,3 +82,12 @@ CREATE TABLE `chat_servers` (
 );
 
 CREATE UNIQUE INDEX `chat_servers_invite_unique` ON `chat_servers` (`invite`);
+
+-- 0004_hard_gambit.sql
+CREATE TABLE `site_visits` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text,
+	`page` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`seen_at` integer NOT NULL
+);

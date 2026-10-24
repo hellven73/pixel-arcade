@@ -7,3 +7,7 @@ backend-worker.ts contains a portable Cloudflare Worker implementation of the sa
 The Worker allows browser calls from the exact owner origin configured by GITHUB_ORIGIN. GitHub clients send X-Pixel-Client: github-pages and authenticate with a one-day bearer token obtained through normal username/password login. Tokens are hashed in the database, kept in tab sessionStorage by the UI and revoked on logout. Cross-origin requests cannot reuse same-origin account cookies. Chat membership and owner permissions are checked on every operation.
 
 Changing the backend host requires deploying this Worker with the database and secrets, and updating the service base URL in api-client.js. Deploying the static repository alone will not create a database. Existing data is not copied into GitHub.
+
+## Administrator and public lobby
+
+Set PIXEL_ADMIN_USERNAME to an existing arcade username to enable its admin access. With the variable absent, admin access is disabled. Admin responses contain account and activity summaries only; no password hashes, salts, passwords or session tokens. The public community lobby is created lazily as product data and every account joins when it opens chat; it is not invite-only and cannot be left. The site_visits migration adds minimal first-party records with a 30-day retention period. The UI starts a new visit when account identity changes, so activity after logout is not attributed to the previous user.

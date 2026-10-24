@@ -1,0 +1,5 @@
+// Minimal first-party visit records. No passwords, IPs, emails or full URLs are collected here.
+(()=>{let id='',last=0,busy=false,lastUser=null;try{const saved=JSON.parse(sessionStorage.getItem('px-visit')||'{}');id=saved.id||'';last=saved.last||0;lastUser=saved.user||null}catch{}
+function remember(){try{sessionStorage.setItem('px-visit',JSON.stringify({id,last,user:lastUser}))}catch{}}
+async function record(){if(document.hidden||busy||!('pixelAccountUsername' in window))return;const currentUser=window.pixelAccountUsername||null;if(currentUser!==lastUser){id='';last=0;lastUser=currentUser}const now=Date.now();if(!id||now-last>30*60*1000)id=arcadeUUID();last=now;remember();const page=document.body.dataset.section||'home';busy=true;try{await post('/api/activity',{id,page})}catch{}finally{busy=false}}
+window.pixelRecordVisit=record;setInterval(record,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)record()});document.addEventListener('pixel-account-changed',record);window.addEventListener('load',record);record();})();
