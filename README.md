@@ -39,3 +39,7 @@ The calculator includes Standard, Scientific, History export, Symbolic algebra, 
 Pixel AI is a real general chat integration using Puter.js. Visitors connect their own Puter account. Their allowance/credits and provider terms apply; the repository has no private API key. Messages and recent context go to Puter and its AI provider only when submitted. This app keeps the conversation in tab memory, not localStorage; clearing the view does not erase provider records. The SDK loads lazily on the AI page. The existing Arcade helper remains a separate scripted catalogue guide.
 
 Light, dark and device-based themes save locally. Cover, optional cover-on-tab-switch and Quick exit change the visible screen; they do not conceal network activity or device monitoring.
+
+## Chat appearance
+
+Pixel Chat uses a full-window server/channel/message/member layout, grouped messages, avatar colours, emoji insertion, channel drafts in tab memory, pinned-message viewing and responsive sidebars. It uses the existing chat API and moderation rules. Themes offers eight saved palettes with light/dark/device modes. Reflection dimming applies to rendered page and player surfaces, with immediate controls and 20–85% strength. Generic blank-tab wrappers rely on the inner arcade for dimming so the effect is not applied twice; the direct Minecraft wrapper dims its own iframe.
