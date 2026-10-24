@@ -31,3 +31,13 @@ Edit the website files and commit to main. GitHub Pages publishes the updates au
 ## Credits
 
 External games and media belong to their respective creators. Sources remain recorded in `originals.json` and `catalog.js`. Chess.js and mathjs license notices are in the `vendor-*-LICENSE` files.
+
+## User manual and new tools
+
+Open [User manual](manual.html) from the site sidebar for instructions, examples, data-storage details and troubleshooting. It can be printed or saved as PDF using the browser print dialog.
+
+The calculator includes Standard, Scientific, History export, Symbolic algebra, Equations, Polynomials, Matrices (including QR decomposition), Vectors, Derivatives, Integrals, numerical first-order differential equations, QR Grapher (explicit functions and implicit relations), Statistics, Regression, Complex, 16–100 digit BigNumber precision, Constants and Units. Its engines run locally in disposable time-limited Web Workers. Numerical plots, integral estimates and ODE solutions have the limitations explained in the interface. Nerdamer 1.1.13 is vendored with its MIT license in vendor-nerdamer-LICENSE.
+
+Pixel AI is a real general chat integration using Puter.js. Visitors connect their own Puter account. Their allowance/credits and provider terms apply; the repository has no private API key. Messages and recent context go to Puter and its AI provider only when submitted. This app keeps the conversation in tab memory, not localStorage; clearing the view does not erase provider records. The SDK loads lazily on the AI page. The existing Arcade helper remains a separate scripted catalogue guide.
+
+Light, dark and device-based themes save locally. Cover, optional cover-on-tab-switch and Quick exit change the visible screen; they do not conceal network activity or device monitoring.
