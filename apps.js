@@ -1,0 +1,72 @@
+// App launchers use the external Scramjet service. No proxy code runs on the arcade account origin.
+const appIcons={
+ youtube:'<svg viewBox="0 0 32 32" fill="none"><rect x="2" y="6" width="28" height="20" rx="7" fill="#ff0033"/><path d="m13 11 9 5-9 5z" fill="white"/></svg>',
+ tiktok:'<svg viewBox="0 0 32 32" fill="none"><path d="M19 5v16a6 6 0 1 1-5-6" stroke="#25f4ee" stroke-width="5"/><path d="M21 4c0 6 4 8 7 8M21 4v17a6 6 0 1 1-5-6" stroke="#fe2c55" stroke-width="4"/><path d="M20 4v17a6 6 0 1 1-5-6M20 4c0 6 4 8 7 8" stroke="white" stroke-width="3"/></svg>',
+ discord:'<svg viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="12" fill="#5865f2"/><path d="m9 10 4-1 1 2h4l1-2 4 1 3 11-5 3-2-3h-6l-2 3-5-3z" fill="white"/><circle cx="12" cy="17" r="2" fill="#5865f2"/><circle cx="20" cy="17" r="2" fill="#5865f2"/></svg>',
+ x:'<svg viewBox="0 0 32 32" fill="none"><path d="M6 5h6l14 22h-6zM25 5 7 27" stroke="white" stroke-width="2"/></svg>',
+ google:'<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="white"/><path d="M23 10a10 10 0 0 0-7-3" stroke="#ea4335" stroke-width="4" fill="none"/><path d="M16 7a9 9 0 0 0-8 5" stroke="#fbbc05" stroke-width="4" fill="none"/><path d="M8 12a9 9 0 0 0 1 10" stroke="#34a853" stroke-width="4" fill="none"/><path d="M9 22a9 9 0 0 0 15-6h-8" stroke="#4285f4" stroke-width="4" fill="none"/></svg>',
+ nvidia:'<svg viewBox="0 0 32 32" fill="none"><rect x="1" y="4" width="30" height="24" rx="3" fill="#76b900"/><path d="M5 16c7-9 16-9 23 0-7 9-16 9-23 0Z" stroke="white" stroke-width="1.7"/><path d="M11 16c4-5 9-4 12 0-3 5-8 5-12 0Z" stroke="white" stroke-width="1.7"/><circle cx="17" cy="16" r="2" fill="white"/></svg>',
+ games:arcadeIcons.arcade, ai:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="22" height="17" rx="4"/><path d="M16 5v6M2 17v5M30 17v5M11 23h10"/><circle cx="16" cy="4" r="2"/><circle cx="11" cy="17" r="1.5"/><circle cx="21" cy="17" r="1.5"/></svg>' , music:arcadeIcons.music,
+ chat:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4h17a4 4 0 0 1 4 4v21l-7-6H7a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z"/><path d="M9 11h13M9 16h9"/></svg>',
+ notes:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 22-2 7 7-2L28 9a3 3 0 0 0-5-5Z M19 8l5 5M6 22l5 5"/></svg>',
+ globe:'<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="16" cy="16" r="13"/><ellipse cx="16" cy="16" rx="6" ry="13"/><path d="M4 11h24M4 21h24"/></svg>'
+};
+const dockApps=[
+ {id:'youtube',name:'YouTube',url:'https://www.youtube.com/',detail:'Videos, channels & playlists',color:'#ff576c'},
+ {id:'tiktok',name:'TikTok',url:'https://www.tiktok.com/',detail:'Short videos & your feed',color:'#65e9e5'},
+ {id:'discord',name:'Discord',url:'https://discord.com/app',detail:'Your communities & conversations',color:'#9ca6ff'},
+ {id:'x',name:'X',url:'https://x.com/',detail:'Posts & what’s happening',color:'#edf3ee'},
+ {id:'google',name:'Google',url:'https://www.google.com/',detail:'A starting point for the web',color:'#8abbff'},
+ {id:'nvidia',name:'GeForce NOW',url:'https://play.geforcenow.com/',detail:'NVIDIA cloud gaming · account required',color:'#b6e66a'},
+ {id:'games',name:'Games',section:'big',detail:'Your original collection & new adventures'},
+ {id:'ai',name:'AI tools',url:'https://chatgpt.com/',detail:'Open ChatGPT · external service'},
+ {id:'music',name:'Music',section:'music',detail:'The Spooftify player'},
+ {id:'chat',name:'Arcade helper',section:'chat',detail:'Game recommendations & site help'},
+ {id:'notes',name:'Notes',section:'notes',detail:'A little space for your ideas'}
+];
+let browserTarget='',proxyLoaded=false;
+const browserSession=new PixelBrowserSession(),browserFrames=new Map();let browserBookmarks=[];
+try{const saved=JSON.parse(localStorage.getItem('px-browser-bookmarks')||'[]');if(Array.isArray(saved))browserBookmarks=saved.filter(v=>typeof v==='string').map(v=>pixelBrowserUrl(v)).slice(0,12)}catch{}
+function browserUrl(value){return pixelBrowserUrl(value)}
+function externalProxyUrl(target){const url=new URL('https://scramjet.mercurywork.shop/');url.searchParams.set('goto',target);return url.href}
+function browserLabel(url){if(!url)return 'New tab';const u=new URL(url);return u.hostname==='www.google.com'&&u.pathname==='/search'?'Search: '+u.searchParams.get('q'):u.hostname.replace(/^www\./,'')}
+function browserFeedback(value){$('#browser-feedback').textContent=value}
+function saveBrowserBookmarks(){try{localStorage.setItem('px-browser-bookmarks',JSON.stringify(browserBookmarks))}catch{browserFeedback('Bookmarks could not save on this browser.')}}
+function drawBookmarks(){const root=$('#browser-bookmarks');root.replaceChildren();for(const url of browserBookmarks){const b=document.createElement('button');b.className='browser-bookmark-chip';b.textContent='☆ '+browserLabel(url);b.title=url;b.onclick=()=>startBrowser(url);root.append(b)}$('#browser-bookmark-hint').hidden=!!browserBookmarks.length;$('#browser-clear-bookmarks').hidden=!browserBookmarks.length}
+function releaseBrowserFrames(){for(const frame of browserFrames.values()){frame.src='about:blank';frame.remove()}browserFrames.clear();proxyLoaded=false;$('#browser-viewport').hidden=true}
+function paintBrowser(reload=false){
+ const tab=browserSession.current,url=browserSession.url;browserTarget=url;
+ const tabs=$('#browser-tabs');tabs.replaceChildren();for(const t of browserSession.tabs){const value=t.history[t.index],row=document.createElement('div');row.className='browser-tab'+(t.id===tab.id?' active':'');const select=document.createElement('button');select.type='button';select.setAttribute('role','tab');select.setAttribute('aria-selected',String(t.id===tab.id));select.setAttribute('aria-controls','browser-viewport');select.title=value||'New tab';select.textContent=(value?'◎ ':'✦ ')+browserLabel(value);select.onclick=()=>{browserSession.select(t.id);paintBrowser();browserFeedback('')};const close=document.createElement('button');close.type='button';close.className='browser-tab-close';close.textContent='×';close.setAttribute('aria-label','Close '+browserLabel(value));close.onclick=()=>{const frame=browserFrames.get(t.id);if(frame){frame.src='about:blank';frame.remove();browserFrames.delete(t.id)}browserSession.close(t.id);paintBrowser()};row.append(select,close);tabs.append(row)}
+ $('#browser-new-tab').disabled=browserSession.tabs.length>=6;$('#browser-back').disabled=tab.index===0;$('#browser-forward').disabled=tab.index>=tab.history.length-1;$('#browser-address').value=url;$('#browser-reload').disabled=!url;$('#browser-stop').disabled=!url;$('#browser-open-blank').disabled=!url;$('#browser-bookmark').disabled=!url;const starred=browserBookmarks.includes(url);$('#browser-bookmark').textContent=starred?'★':'☆';$('#browser-bookmark').setAttribute('aria-label',starred?'Remove bookmark':'Bookmark this website');$('#browser-bookmark').classList.toggle('saved',starred);
+ $('#browser-standby').hidden=!!url;$('#browser-viewport').hidden=!url;$('#browser-links').hidden=!url;
+ for(const [id,frame]of browserFrames){frame.hidden=id!==tab.id||!url;frame.removeAttribute('id')}
+ if(url){let frame=browserFrames.get(tab.id);if(!frame){frame=document.createElement('iframe');frame.className='browser-web-frame';frame.title='Scramjet — '+browserLabel(url);frame.allow='autoplay; fullscreen; encrypted-media; clipboard-write; gamepad';frame.allowFullscreen=true;frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-pointer-lock allow-modals');browserFrames.set(tab.id,frame);$('#browser-viewport').append(frame)}frame.id='web-browser-frame';frame.hidden=false;const proxy=externalProxyUrl(url);if(reload||frame.dataset.target!==url){tab.status='Opening '+browserLabel(url)+'…';frame.dataset.target=url;frame.onload=()=>{if(frame.dataset.target!==url)return;tab.status='Frame loaded · external pages may still block access or sign-in.';if(browserSession.active===tab.id)$('#browser-status').textContent=tab.status};frame.src=proxy}proxyLoaded=true;$('#browser-external').href=proxy;$('#browser-direct').href=url;$('#browser-status').textContent=tab.status||'External browsing through Scramjet.';
+ }else{const frame=browserFrames.get(tab.id);if(frame){frame.src='about:blank';frame.remove();browserFrames.delete(tab.id)}$('#browser-status').textContent='Ready when you are.'}
+ drawBookmarks();
+}
+function startBrowser(value){try{const target=browserUrl(value);browserSession.navigate(target);showSection('browser');paintBrowser();browserFeedback('')}catch(error){browserFeedback(error.message)}}
+
+function launchDock(app){if(app.url)startBrowser(app.url);else showSection(app.section)}
+const appDock=document.createElement('nav');appDock.className='app-dock';appDock.setAttribute('aria-label','App dock');
+for(const app of dockApps){const button=document.createElement('button');button.className='dock-button dock-'+app.id;button.innerHTML=appIcons[app.id];button.title=app.name;button.setAttribute('aria-label',app.name);button.dataset.app=app.id;button.onclick=()=>launchDock(app);appDock.append(button)}const browserButton=document.createElement('button');browserButton.className='dock-button dock-browser';browserButton.innerHTML=appIcons.globe;browserButton.title='Web browser';browserButton.setAttribute('aria-label','Web browser');browserButton.onclick=()=>showSection('browser');appDock.append(browserButton);document.querySelector('main').prepend(appDock);
+const appGrid=$('#apps-grid');for(const app of dockApps){const button=document.createElement('button');button.className='app-tile';button.style.setProperty('--app-color',app.color||'#b9dfc6');button.innerHTML='<span class="app-tile-icon">'+appIcons[app.id]+'</span><strong></strong><small></small><span class="app-tile-arrow">↗</span>';button.querySelector('strong').textContent=app.name;button.querySelector('small').textContent=app.detail;button.onclick=()=>launchDock(app);appGrid.append(button)}
+const appShowSection=showSection;showSection=function(next){if(next!=='browser'&&proxyLoaded)releaseBrowserFrames();appShowSection(next);for(const name of ['apps','browser','notes'])$('#'+name+'-page').hidden=section!==name;document.querySelectorAll('.app-dock [data-app]').forEach(button=>{const app=dockApps.find(a=>a.id===button.dataset.app);button.classList.toggle('selected',app.section===section||section==='browser'&&browserTarget===app.url)});if(section==='browser')paintBrowser()};
+// Replace the original placeholder frame; tabs manage their own frame lifetimes.
+$('#web-browser-frame').remove();
+$('#browser-form').onsubmit=e=>{e.preventDefault();startBrowser($('#browser-address').value)};
+$('#browser-reload').onclick=()=>paintBrowser(true);
+$('#browser-new-tab').onclick=()=>{try{browserSession.create();paintBrowser();$('#browser-address').focus();browserFeedback('')}catch(e){browserFeedback(e.message)}};
+$('#browser-back').onclick=()=>{browserSession.step(-1);paintBrowser()};$('#browser-forward').onclick=()=>{browserSession.step(1);paintBrowser()};
+$('#browser-home').onclick=()=>{browserSession.navigate('');paintBrowser();$('#browser-address').focus()};
+$('#browser-bookmark').onclick=()=>{const url=browserSession.url;if(!url)return;if(browserBookmarks.includes(url))browserBookmarks=browserBookmarks.filter(u=>u!==url);else{if(browserBookmarks.length>=12){browserFeedback('You have 12 bookmarks. Remove one with ★ before adding another.');return}browserBookmarks.push(url)}saveBrowserBookmarks();paintBrowser();browserFeedback('')};
+$('#browser-clear-bookmarks').onclick=()=>{if(confirm('Clear your saved browser bookmarks?')){browserBookmarks=[];saveBrowserBookmarks();paintBrowser()}};
+$('#apps-open-browser').onclick=()=>showSection('browser');
+$('#browser-stop').onclick=()=>{const tab=browserSession.current,frame=browserFrames.get(tab.id);if(frame){frame.src='about:blank';frame.remove();browserFrames.delete(tab.id)}tab.status='Page stopped. Press reload to try again.';$('#browser-status').textContent=tab.status;$('#browser-viewport').hidden=true;$('#browser-standby').hidden=false;$('#browser-menu').open=false};
+$('#browser-fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});else $('#browser-workspace').requestFullscreen().catch(()=>browserFeedback('Fullscreen is unavailable in this browser.'))};
+$('#browser-open-blank').onclick=()=>{if(!browserTarget){browserFeedback('Open a website first.');return}const entry=games.find(g=>g.id==='web-browser');entry.embed=externalProxyUrl(browserTarget);try{localStorage.setItem('px-browser-target',browserTarget)}catch{}openBlank(entry.id);$('#browser-menu').open=false};
+for(const app of dockApps.filter(a=>['youtube','tiktok','discord','google','x','nvidia'].includes(a.id))){const button=document.createElement('button');button.className='browser-start-app';button.innerHTML=appIcons[app.id];const label=document.createElement('span');label.textContent=app.name;button.append(label);button.onclick=()=>startBrowser(app.url);$('#browser-start-apps').append(button)}
+$('#browser-address').onfocus=e=>e.target.select();paintBrowser();
+
+const webEntry={id:'web-browser',name:'Web browser',cat:'Apps',kind:'media',embed:'https://scramjet.mercurywork.shop/',external:true,help:'External Scramjet browser. Site availability and logins depend on the destination and proxy service.'};try{const saved=localStorage.getItem('px-browser-target');if(saved)webEntry.embed=externalProxyUrl(browserUrl(saved))}catch{}games.push(webEntry);
+const notes=$('#personal-notes');try{notes.value=localStorage.getItem('px-notes')||''}catch{}notes.oninput=()=>{try{localStorage.setItem('px-notes',notes.value);$('#notes-status').textContent='Saved on this browser'}catch{$('#notes-status').textContent='Browser storage is unavailable.'}};$('#download-notes').onclick=()=>{const blob=new Blob([notes.value],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='pixel-notes.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+const launchId=new URLSearchParams(location.search).get('play');if(['apps','browser','notes'].includes(section))showSection(section);if(launchId==='web-browser')openGame(webEntry,true);
