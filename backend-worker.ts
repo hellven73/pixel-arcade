@@ -24,7 +24,7 @@ async function passwordHash(password:string,salt:string){const key=await crypto.
 function equal(a:string,b:string){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
 function tokenFrom(req:Request){if(githubClient(req)){const match=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.get('authorization')||'');return match?.[1]||null;}const name=cookieName(req);const value=(req.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='))?.slice(name.length+1);return value&&/^[a-f0-9]{64}$/.test(value)?value:null}
 async function getAccount(req:Request){const token=tokenFrom(req);if(!token)return null;return env.DB!.prepare('SELECT a.user_id AS userId,a.username FROM account_tokens t JOIN arcade_accounts a ON a.user_id=t.user_id WHERE t.token_hash=? AND t.expires_at>?').bind(await digest(token),Date.now()).first<{userId:string;username:string}>()}
-async function limited(req:Request,action:string,username=''){const ip=req.headers.get('cf-connecting-ip')||'local-preview';const key=await digest(action+':'+ip+':'+username),now=Date.now(),max=action==='party-move'?600:action==='social-dm'?180:action.startsWith('social-')?90:action==='activity'?240:action==='register'?6:action==='chat-typing'?600:action==='chat-send'?180:action.startsWith('chat-')?90:15;await env.DB!.prepare('INSERT INTO auth_limits(key,attempts,resets_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN resets_at<=? THEN 1 ELSE attempts+1 END,resets_at=CASE WHEN resets_at<=? THEN excluded.resets_at ELSE resets_at END').bind(key,now+15*60*1000,now,now).run();const row=await env.DB!.prepare('SELECT attempts FROM auth_limits WHERE key=?').bind(key).first<{attempts:number}>();return (row?.attempts||0)>max}
+async function limited(req:Request,action:string,username=''){const ip=req.headers.get('cf-connecting-ip')||'local-preview';const key=await digest(action+':'+ip+':'+username),now=Date.now(),max=action.startsWith('recovery-')?5:action==='party-move'?600:action==='social-dm'?180:action.startsWith('social-')?90:action==='activity'?240:action==='register'?6:action==='chat-typing'?600:action==='chat-send'?180:action.startsWith('chat-')?90:15;await env.DB!.prepare('INSERT INTO auth_limits(key,attempts,resets_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN resets_at<=? THEN 1 ELSE attempts+1 END,resets_at=CASE WHEN resets_at<=? THEN excluded.resets_at ELSE resets_at END').bind(key,now+15*60*1000,now,now).run();const row=await env.DB!.prepare('SELECT attempts FROM auth_limits WHERE key=?').bind(key).first<{attempts:number}>();return (row?.attempts||0)>max}
 async function parseBody(req:Request){if(!(req.headers.get('content-type')||'').startsWith('application/json'))return null;const value=await req.text();if(value.length>4096)return null;try{return JSON.parse(value)}catch{return null}}
 
 function isAdmin(user:{username:string}|null){const configured=String((env as unknown as Record<string,string>).PIXEL_ADMIN_USERNAME||'').trim().toLowerCase();return !!user&&/^[a-z0-9_]{3,24}$/.test(configured)&&user.username===configured}
@@ -63,14 +63,15 @@ async function POST(req:Request){
  if(typeof password!=='string'||password.length<7||password.length>128)return json({error:'Use a password with 7–128 characters.'},400);
  if(await limited(req,'register'))return json({error:'Too many sign-up attempts. Try again in 15 minutes.'},429);
  const existing=await env.DB!.prepare('SELECT user_id FROM arcade_accounts WHERE username=?').bind(username).first();if(existing)return json({error:'That username is taken. Choose another.'},409);
- const userId='arcade:'+crypto.randomUUID(),salt=randomHex(16),hash=await passwordHash(password,salt),now=Date.now(),token=randomHex();
+ const userId='arcade:'+crypto.randomUUID(),salt=randomHex(16),hash=await passwordHash(password,salt),now=Date.now(),token=randomHex(),recoveryCode=randomHex(24),recoveryHash=await digest(recoveryCode);
  try{await env.DB!.batch([
  env.DB!.prepare('INSERT INTO arcade_accounts(user_id,username,password_hash,salt,created_at) VALUES(?,?,?,?,?)').bind(userId,username,hash,salt,now),
+ env.DB!.prepare('INSERT INTO password_recovery(user_id,backup_hash,updated_at) VALUES(?,?,?)').bind(userId,recoveryHash,now),
  env.DB!.prepare('INSERT INTO players(user_id,name,created_at) VALUES(?,?,?)').bind(userId,b.username.trim(),now),
  env.DB!.prepare('INSERT INTO account_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await digest(token),userId,now+(githubClient(req)?GITHUB_SESSION_TTL:ACCOUNT_TTL)*1000)
  ])}catch(error){if(String(error).includes('UNIQUE'))return json({error:'That username is taken. Choose another.'},409);throw error}
- if(githubClient(req))return json({ok:true,token,expiresAt:now+GITHUB_SESSION_TTL*1000},201);
- return json({ok:true},201,{'Set-Cookie':sessionCookie(req,token)});
+ if(githubClient(req))return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-'),token,expiresAt:now+GITHUB_SESSION_TTL*1000},201);
+ return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-')},201,{'Set-Cookie':sessionCookie(req,token)});
 }
 
 return {POST};})(),
@@ -97,6 +98,48 @@ return {POST};})(),
 
 
 async function POST(req:Request){if(!sameOrigin(req))return json({error:'Invalid origin.'},403);const token=tokenFrom(req);if(token)await env.DB!.prepare('DELETE FROM account_tokens WHERE token_hash=?').bind(await digest(token)).run();return json({ok:true},200,{'Set-Cookie':sessionCookie(req,'',0)})}
+
+return {POST};})(),
+"/api/auth/recovery":(()=>{
+
+
+const newCode=()=>randomHex(24).match(/.{8}/g)!.join('-');
+const invalid=()=>json({error:'The username or recovery code is invalid, expired or already used.'},400);
+async function POST(req:Request){
+ if(!sameOrigin(req))return json({error:'Invalid origin.'},403);const b=await parseBody(req);if(!b||!['setup','change','reset','issue'].includes(b.action))return json({error:'Invalid request.'},400);
+ if(await limited(req,'recovery-ip'))return json({error:'Too many recovery attempts. Try again in 15 minutes.'},429);
+ const db=env.DB!,now=Date.now();let target:any,condition='',conditionArgs:any[]=[];
+ if(b.action==='reset'){
+ const username=typeof b.username==='string'?b.username.trim().toLowerCase():'';
+ if(await limited(req,'recovery-user',username))return json({error:'Too many recovery attempts. Try again in 15 minutes.'},429);
+ if(!/^[a-z0-9_]{3,24}$/.test(username)||typeof b.code!=='string'||!/^[a-f0-9-]{48,64}$/i.test(b.code.trim()))return invalid();const code=b.code.trim().replace(/-/g,'').toLowerCase();if(code.length!==48)return invalid();
+ const hash=await digest(code);target=await db.prepare('SELECT a.user_id,a.password_hash FROM arcade_accounts a JOIN password_recovery r ON r.user_id=a.user_id WHERE a.username=? AND (r.backup_hash=? OR (r.reset_hash=? AND r.reset_expires>?))').bind(username,hash,hash,now).first<any>();if(!target)return invalid();
+ condition=' AND EXISTS(SELECT 1 FROM password_recovery r WHERE r.user_id=arcade_accounts.user_id AND (r.backup_hash=? OR (r.reset_hash=? AND r.reset_expires>?)))';conditionArgs=[hash,hash,now];
+ }else{
+ const user=await getAccount(req);if(!user)return json({error:'Sign in before managing account security.'},401);
+ if(typeof b.currentPassword!=='string'||b.currentPassword.length>128)return json({error:'Confirm your current password.'},400);
+ const account=await db.prepare('SELECT user_id,password_hash,salt FROM arcade_accounts WHERE user_id=?').bind(user.userId).first<any>();if(!account||!equal(await passwordHash(b.currentPassword,account.salt),account.password_hash))return json({error:'Current password is incorrect.'},403);
+ target=account;
+ if(b.action==='issue'){
+ if(!isAdmin(user))return json({error:'Administrator access required.'},403);if(b.verified!==true)return json({error:'Verify the player’s identity before issuing a reset code.'},400);
+ const username=typeof b.username==='string'?b.username.trim().toLowerCase():'';const other=await db.prepare('SELECT user_id,username FROM arcade_accounts WHERE username=?').bind(username).first<any>();if(!other)return json({error:'Account not found.'},404);if(isAdmin(other))return json({error:'Administrators must use their own saved recovery code or current password.'},403);
+ const code=newCode(),expiresAt=now+15*60000,codeHash=await digest(code.replace(/-/g,''));await db.batch([db.prepare("INSERT INTO password_recovery(user_id,backup_hash,reset_hash,reset_expires,updated_at) VALUES(?,'',?,?,?) ON CONFLICT(user_id) DO UPDATE SET reset_hash=excluded.reset_hash,reset_expires=excluded.reset_expires,updated_at=excluded.updated_at").bind(other.user_id,codeHash,expiresAt,now),db.prepare('INSERT INTO recovery_audit VALUES(?,?,?,?,?)').bind(crypto.randomUUID(),user.userId,other.user_id,'admin-issued',now)]);return json({ok:true,resetCode:code,username:other.username,expiresAt});
+ }
+ if(b.action==='setup'){
+ const code=newCode(),hash=await digest(code.replace(/-/g,''));const result=await db.prepare('INSERT INTO password_recovery(user_id,backup_hash,reset_hash,reset_expires,updated_at) SELECT user_id,?,NULL,NULL,? FROM arcade_accounts WHERE user_id=? AND password_hash=? ON CONFLICT(user_id) DO UPDATE SET backup_hash=excluded.backup_hash,reset_hash=NULL,reset_expires=NULL,updated_at=excluded.updated_at WHERE EXISTS(SELECT 1 FROM arcade_accounts a WHERE a.user_id=excluded.user_id AND a.password_hash=?)').bind(hash,now,user.userId,account.password_hash,account.password_hash).run();if(!(result.meta?.changes||result.changes))return json({error:'Your account changed. Sign in and try again.'},409);return json({ok:true,recoveryCode:code});
+ }
+ condition=' AND password_hash=?';conditionArgs=[account.password_hash];
+ }
+ if(typeof b.newPassword!=='string'||b.newPassword.length<7||b.newPassword.length>128)return json({error:'Use a new password with 7–128 characters.'},400);
+ const salt=randomHex(16),hash=await passwordHash(b.newPassword,salt),code=newCode(),backupHash=await digest(code.replace(/-/g,''));
+ const results=await db.batch([
+ db.prepare('UPDATE arcade_accounts SET password_hash=?,salt=? WHERE user_id=?'+condition).bind(hash,salt,target.user_id,...conditionArgs),
+ db.prepare('DELETE FROM account_tokens WHERE user_id=? AND EXISTS(SELECT 1 FROM arcade_accounts a WHERE a.user_id=? AND a.password_hash=?)').bind(target.user_id,target.user_id,hash),
+ db.prepare('INSERT INTO password_recovery(user_id,backup_hash,reset_hash,reset_expires,updated_at) SELECT user_id,?,NULL,NULL,? FROM arcade_accounts WHERE user_id=? AND password_hash=? ON CONFLICT(user_id) DO UPDATE SET backup_hash=excluded.backup_hash,reset_hash=NULL,reset_expires=NULL,updated_at=excluded.updated_at').bind(backupHash,now,target.user_id,hash),
+ db.prepare('INSERT INTO recovery_audit(id,actor,target,event,created_at) SELECT ?,user_id,user_id,?,? FROM arcade_accounts WHERE user_id=? AND password_hash=?').bind(crypto.randomUUID(),b.action==='reset'?'code-reset':'password-change',now,target.user_id,hash)
+ ]);
+ if(!(results[0].meta?.changes||results[0].changes))return invalid();return json({ok:true,recoveryCode:code,signedOut:true},200,{'Set-Cookie':sessionCookie(req,'',0)});
+}
 
 return {POST};})(),
 "/api/profile":(()=>{

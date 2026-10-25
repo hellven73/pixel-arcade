@@ -6,7 +6,7 @@ async function request(path,options={}){if(!path.startsWith('/api/'))throw Error
  const data=await response.json().catch(()=>({error:'Pixel services returned an unexpected response.'}));
  if(!response.ok){if(response.status===401&&(path==='/api/profile'||path.startsWith('/api/chat')))clear();throw Object.assign(new Error(data.error||'Could not complete that request.'),{status:response.status})}
  if(/^\/api\/auth\/(login|register)$/.test(path)&&/^[a-f0-9]{64}$/.test(data.token||'')){token=data.token;expiresAt=data.expiresAt;try{sessionStorage.setItem(key,JSON.stringify({token,expiresAt}))}catch{}}
- if(path==='/api/auth/logout')clear();
+ if(path==='/api/auth/logout'||(path==='/api/auth/recovery'&&data.signedOut))clear();
  if(path.startsWith('/api/dev/framex')){if(data.devToken){devToken=data.devToken;try{sessionStorage.setItem('px-dev-session',devToken)}catch{}}if(options.method==='DELETE'){devToken='';try{sessionStorage.removeItem('px-dev-session')}catch{}}}
  return data;
 }window.pixelApi={request};})();

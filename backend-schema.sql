@@ -163,3 +163,19 @@ CREATE TABLE `user_reports` (
 	`created` integer NOT NULL,
 	`reviewer` text
 );
+
+CREATE TABLE `password_recovery` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`backup_hash` text DEFAULT '' NOT NULL,
+	`reset_hash` text,
+	`reset_expires` integer,
+	`updated_at` integer NOT NULL
+);
+
+CREATE TABLE `recovery_audit` (
+	`id` text PRIMARY KEY NOT NULL,
+	`actor` text NOT NULL,
+	`target` text NOT NULL,
+	`event` text NOT NULL,
+	`created_at` integer NOT NULL
+);

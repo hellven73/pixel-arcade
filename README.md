@@ -46,3 +46,6 @@ Pixel Chat uses a full-window server/channel/message/member layout, grouped mess
 
 ## Community features
 Friends & DMs includes accepted friend requests, private conversations, custom profile cards and blocking. Party rooms support Chess, Tic Tac Toe, Connect Four and Dots & Boxes with server-validated turns. Daily Lights Out changes at Sydney midnight and has daily/all-time leaderboards based on validated moves. Moderation includes content reports, report snapshots, public slow mode, mutes and community suspensions. See the in-site user manual for controls, privacy details and limitations.
+
+## Password reset
+Account includes Forgot password, Change password and private recovery-code setup. New players receive a code after signup. The configured administrator can issue a 15-minute one-use reset code for another player after confirming their own password and independently verifying the player’s identity. A successful reset signs out every existing session and replaces the recovery code. See the user manual.
