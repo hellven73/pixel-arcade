@@ -43,3 +43,6 @@ Light, dark and device-based themes save locally. Cover, optional cover-on-tab-s
 ## Chat appearance
 
 Pixel Chat uses a full-window server/channel/message/member layout, grouped messages, avatar colours, emoji insertion, channel drafts in tab memory, pinned-message viewing and responsive sidebars. It uses the existing chat API and moderation rules. Themes offers eight saved palettes with light/dark/device modes. Reflection dimming applies to rendered page and player surfaces, with immediate controls and 20–85% strength. Generic blank-tab wrappers rely on the inner arcade for dimming so the effect is not applied twice; the direct Minecraft wrapper dims its own iframe.
+
+## Community features
+Friends & DMs includes accepted friend requests, private conversations, custom profile cards and blocking. Party rooms support Chess, Tic Tac Toe, Connect Four and Dots & Boxes with server-validated turns. Daily Lights Out changes at Sydney midnight and has daily/all-time leaderboards based on validated moves. Moderation includes content reports, report snapshots, public slow mode, mutes and community suspensions. See the in-site user manual for controls, privacy details and limitations.

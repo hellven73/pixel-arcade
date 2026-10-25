@@ -1,4 +1,4 @@
--- 0000_new_metal_master.sql
+-- Pixel Arcade schema. Apply once on a new database; existing databases use numbered migrations.
 CREATE TABLE `players` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -15,8 +15,6 @@ CREATE TABLE `sessions` (
 	`created_at` integer NOT NULL
 );
 
-
--- 0001_curly_adam_warlock.sql
 CREATE TABLE `account_tokens` (
 	`token_hash` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -38,11 +36,7 @@ CREATE TABLE `auth_limits` (
 	`resets_at` integer NOT NULL
 );
 
-
--- 0002_groovy_maelstrom.sql
 ALTER TABLE `sessions` ADD `game_name` text;
-
--- 0003_superb_barracuda.sql
 CREATE TABLE `chat_channels` (
 	`id` text PRIMARY KEY NOT NULL,
 	`server` text NOT NULL,
@@ -82,12 +76,90 @@ CREATE TABLE `chat_servers` (
 );
 
 CREATE UNIQUE INDEX `chat_servers_invite_unique` ON `chat_servers` (`invite`);
-
--- 0004_hard_gambit.sql
 CREATE TABLE `site_visits` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text,
 	`page` text NOT NULL,
 	`created_at` integer NOT NULL,
 	`seen_at` integer NOT NULL
+);
+
+CREATE TABLE `chat_settings` (
+	`server` text PRIMARY KEY NOT NULL,
+	`slow_seconds` integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE `daily_scores` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`day` text NOT NULL,
+	`moves` integer NOT NULL,
+	`points` integer NOT NULL,
+	`created` integer NOT NULL
+);
+
+CREATE TABLE `direct_messages` (
+	`id` text PRIMARY KEY NOT NULL,
+	`sender` text NOT NULL,
+	`receiver` text NOT NULL,
+	`body` text NOT NULL,
+	`created` integer NOT NULL
+);
+
+CREATE TABLE `friendships` (
+	`id` text PRIMARY KEY NOT NULL,
+	`sender` text NOT NULL,
+	`receiver` text NOT NULL,
+	`status` text NOT NULL,
+	`created` integer NOT NULL
+);
+
+CREATE TABLE `moderation_actions` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`muted_until` integer DEFAULT 0 NOT NULL,
+	`banned` integer DEFAULT 0 NOT NULL,
+	`reason` text DEFAULT '' NOT NULL,
+	`actor` text NOT NULL,
+	`updated` integer NOT NULL
+);
+
+CREATE TABLE `party_rooms` (
+	`id` text PRIMARY KEY NOT NULL,
+	`code` text NOT NULL,
+	`game` text NOT NULL,
+	`host` text NOT NULL,
+	`guest` text,
+	`state` text NOT NULL,
+	`version` integer DEFAULT 0 NOT NULL,
+	`created` integer NOT NULL,
+	`updated` integer NOT NULL,
+	`expires` integer NOT NULL
+);
+
+CREATE UNIQUE INDEX `party_rooms_code_unique` ON `party_rooms` (`code`);
+CREATE TABLE `social_profiles` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`bio` text DEFAULT '' NOT NULL,
+	`avatar` text DEFAULT '✦' NOT NULL,
+	`accent` text DEFAULT '#9b9fff' NOT NULL,
+	`banner` text DEFAULT 'aurora' NOT NULL
+);
+
+CREATE TABLE `user_blocks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`blocker` text NOT NULL,
+	`blocked` text NOT NULL
+);
+
+CREATE TABLE `user_reports` (
+	`id` text PRIMARY KEY NOT NULL,
+	`reporter` text NOT NULL,
+	`target` text NOT NULL,
+	`kind` text NOT NULL,
+	`message_id` text,
+	`snapshot` text NOT NULL,
+	`reason` text NOT NULL,
+	`status` text DEFAULT 'open' NOT NULL,
+	`created` integer NOT NULL,
+	`reviewer` text
 );
