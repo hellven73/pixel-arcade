@@ -55,3 +55,6 @@ The home page uses compact shortcuts for chat, calculator, chess, friends, parti
 
 ## Interactive onboarding
 A cinematic, replayable welcome screen features a live canvas sculpture with Orbit, Bloom and Wave modes, pointer tilt, drag rotation, tap/keyboard ripples, pause/resume and reduced-motion support. Enter or skip at any time, or launch the action-based ten-step guided setup. Preferences apply to the real app; tool steps check actual interactions. Progress can be paused/resumed locally. The tour replaces the automatic static tutorial and supports reduced motion.
+
+## Marketplace, profiles and roles
+The account-backed marketplace includes 110 original CSS/vector cosmetics, owned inventory, live previews, one frame/effect/name colour and two title slots. Earn coins through capped server-validated chat, active time and one-time achievements. Purchases and gifts use an atomic ledger and reject insufficient balances, duplicates and unowned equipment. Profile editing supports live previews, resized avatars, pronouns, view counts and chat totals. Admin-managed custom roles have colours, ranks and an explicit moderator permission; they cannot grant administrator/password-reset access. Dock icons magnify with pointer proximity and keyboard focus, respecting reduced motion.

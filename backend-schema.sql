@@ -179,3 +179,79 @@ CREATE TABLE `recovery_audit` (
 	`event` text NOT NULL,
 	`created_at` integer NOT NULL
 );
+
+CREATE TABLE `community_roles` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`color` text NOT NULL,
+	`position` integer NOT NULL,
+	`moderate` integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE `market_equipped` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`frame` text DEFAULT '' NOT NULL,
+	`effect` text DEFAULT '' NOT NULL,
+	`color` text DEFAULT '' NOT NULL,
+	`titles` text DEFAULT '[]' NOT NULL
+);
+
+CREATE TABLE `market_inventory` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`item` text NOT NULL,
+	`created` integer NOT NULL
+);
+
+CREATE TABLE `market_ledger` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`delta` integer NOT NULL,
+	`kind` text NOT NULL,
+	`detail` text NOT NULL,
+	`created` integer NOT NULL
+);
+
+CREATE TABLE `market_presence` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`last` integer NOT NULL,
+	`seconds` integer DEFAULT 0 NOT NULL,
+	`day` text NOT NULL
+);
+
+CREATE TABLE `market_wallets` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`coins` integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE `member_roles` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`role` text NOT NULL
+);
+
+CREATE TABLE `profile_details` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`pronouns` text DEFAULT '' NOT NULL,
+	`image` text DEFAULT '' NOT NULL
+);
+
+CREATE TABLE `profile_views` (
+	`id` text PRIMARY KEY NOT NULL,
+	`target` text NOT NULL,
+	`viewer` text NOT NULL
+);
+
+CREATE INDEX market_ledger_user_kind ON market_ledger(user_id,kind,created);
+
+CREATE INDEX market_inventory_user ON market_inventory(user_id);
+
+CREATE INDEX member_roles_user ON member_roles(user_id);
+
+CREATE TRIGGER market_ledger_balance_guard BEFORE INSERT ON market_ledger BEGIN
+ SELECT CASE WHEN NEW.delta=0 OR NEW.delta!=CAST(NEW.delta AS INTEGER) OR NOT EXISTS(SELECT 1 FROM market_wallets WHERE user_id=NEW.user_id AND coins+NEW.delta BETWEEN 0 AND 1000000000) THEN RAISE(ABORT,'invalid_coin_balance') END;
+END;
+
+CREATE TRIGGER market_ledger_apply AFTER INSERT ON market_ledger BEGIN
+ UPDATE market_wallets SET coins=coins+NEW.delta WHERE user_id=NEW.user_id;
+END;
