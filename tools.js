@@ -14,3 +14,5 @@ const requested=window.pixelRequestedSection;if(tools.some(t=>t.id===requested))
 const manual=document.createElement('a');manual.href='manual.html';manual.className='side-link manual-link';manual.innerHTML='<span class="tool-side-icon">?</span> User manual';manual.setAttribute('aria-label','User manual');side?.append(manual);
 
 function syncAdminEntries(){for(const selector of ['#side-nav [data-section=admin]','#side-nav [data-section=moderation]','.app-dock [aria-label="Admin panel"]','.app-dock [aria-label="Moderation"]','#apps-grid .app-tile'])for(const b of document.querySelectorAll(selector)){if(selector.includes('app-tile')&&!b.textContent.includes('Admin panel')&&!b.textContent.includes('Moderation'))continue;b.classList.add('admin-entry');b.hidden=!window.pixelIsAdmin}}document.addEventListener('pixel-account-changed',syncAdminEntries);syncAdminEntries();
+
+import('./compact-ui.js?v=1');

@@ -49,3 +49,6 @@ Friends & DMs includes accepted friend requests, private conversations, custom p
 
 ## Password reset
 Account includes Forgot password, Change password and private recovery-code setup. New players receive a code after signup. The configured administrator can issue a 15-minute one-use reset code for another player after confirming their own password and independently verifying the player’s identity. A successful reset signs out every existing session and replaces the recovery code. See the user manual.
+
+## Compact navigation
+The home page uses compact shortcuts for chat, calculator, chess, friends, parties, daily challenges and AI. Secondary tools and media are grouped in expandable sidebar menus. More (•••) in the header holds themes, dimming, stats, favourites and the quick tour. On small screens the menu button opens the navigation drawer. All existing feature handlers and account/security controls are retained.
