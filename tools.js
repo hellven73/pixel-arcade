@@ -1,6 +1,6 @@
 import './chess-app.js';
 import './admin-panel.js';
-import './social-hub.js?v=3';
+import './social-hub.js?v=4';
 import './marketplace.js?v=1';
 import './roles-ui.js?v=1';
 import './ai-chat.js?v=2';
