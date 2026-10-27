@@ -61,3 +61,5 @@ The account-backed marketplace includes 110 original CSS/vector cosmetics, owned
 
 ## GTA V and browser connection recovery
 The supplied GTA V browser build has a high-end-device card badge and a pre-download WebGPU check. It opens in its own provider tab because its COOP/COEP isolation requirements cannot be supplied by the GitHub Pages embedded player. No game assets are copied into the repository. Direct and Scramjet browser modes preserve entered history/bookmarks, with Retry and an explicit Direct fallback. Frame responses are not reported as verified content success, and an 18-second waiting message covers stalled loads. Network restrictions and cross-origin embedding remain outside the arcade’s control.
+
+Coin rewards: claim 150 daily coins (midnight Australia/Sydney reset); chat 10/minute, max 200/day; active time 25/five minutes, max 300/day. Welcome and achievement grants stay one-time. Configured admin-only /api/admin/coins grants 1–100,000 whole coins to another exact username with an audit reason and replay-safe request ID, without debiting the admin wallet.
