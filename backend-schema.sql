@@ -255,3 +255,9 @@ END;
 CREATE TRIGGER market_ledger_apply AFTER INSERT ON market_ledger BEGIN
  UPDATE market_wallets SET coins=coins+NEW.delta WHERE user_id=NEW.user_id;
 END;
+
+CREATE TABLE `referrals` (
+	`referred_user` text PRIMARY KEY NOT NULL,
+	`referrer` text NOT NULL,
+	`created` integer NOT NULL
+);

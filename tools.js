@@ -1,7 +1,7 @@
 import './chess-app.js';
-import './admin-panel.js?v=2';
+import './admin-panel.js?v=3';
 import './social-hub.js?v=4';
-import './marketplace.js?v=2';
+import './marketplace.js?v=3';
 import './roles-ui.js?v=1';
 import './ai-chat.js?v=2';
 const tools=[{id:'marketplace',name:'Marketplace',icon:'◈',detail:'Earn coins and collect frames, effects, colours and titles.'},{id:'roles',name:'Custom roles',icon:'♢',detail:'Community roles and moderator permissions. Administrator only.'},{id:'social',name:'Friends & DMs',icon:'☻',detail:'Friend requests, private messages and your custom profile.'},{id:'parties',name:'Party rooms',icon:'⚑',detail:'Play compatible games online with a friend.'},{id:'challenges',name:'Daily challenge',icon:'✧',detail:'A fresh puzzle, shared leaderboards and daily points.'},{id:'moderation',name:'Moderation',icon:'⚖',detail:'Review reports and manage community restrictions.'},{id:'admin',name:'Admin panel',icon:'♜',detail:'Accounts, visits and site activity. Administrator access required.'},{id:'ai',name:'Pixel AI',icon:'✦',detail:'Ask questions, explore ideas and get help with real AI.'},{id:'community',name:'Pixel Chat',icon:'💬',detail:'One public community. Chat with everyone on the arcade.'},{id:'calculator',name:'Calculator',icon:'🧮',detail:'Scientific maths, graphs, equations, statistics and conversions.'},{id:'chess',name:'Chess Club',icon:'♞',detail:'Four bot personalities. Pick your side and find your next move.'}];

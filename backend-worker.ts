@@ -12,11 +12,12 @@ export default {async fetch(request:Request,env:any){
 
 
 const ACCOUNT_TTL=30*24*60*60;
+function sessionDuration(remember:unknown){return remember===true?ACCOUNT_TTL:GITHUB_SESSION_TTL}
 const encoder=new TextEncoder();
 const json=(body:unknown,status=200,headers:Record<string,string>={})=>Response.json(body,{status,headers:{'Cache-Control':'no-store',...headers}});
 function sameOrigin(req:Request){return apiOrigin(req)}
 function cookieName(req:Request){return ['terminal.local','localhost','127.0.0.1'].includes(new URL(req.url).hostname)?'px-preview-session':'__Host-px-session'}
-function sessionCookie(req:Request,token:string,maxAge=ACCOUNT_TTL){return `${cookieName(req)}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${cookieName(req).startsWith('__Host-')?'; Secure':''}`}
+function sessionCookie(req:Request,token:string,maxAge=ACCOUNT_TTL,persistent=true){return `${cookieName(req)}=${token}; Path=/; HttpOnly; SameSite=Lax${persistent||maxAge===0?'; Max-Age='+maxAge:''}${cookieName(req).startsWith('__Host-')?'; Secure':''}`}
 const hex=(bytes:ArrayBuffer|Uint8Array)=>Array.from(new Uint8Array(bytes)).map(v=>v.toString(16).padStart(2,'0')).join('');
 async function digest(s:string){return hex(await crypto.subtle.digest('SHA-256',encoder.encode(s)))}
 function randomHex(n=32){return hex(crypto.getRandomValues(new Uint8Array(n)))}
@@ -83,16 +84,18 @@ async function POST(req:Request){
  if(!/^[a-z0-9_]{3,24}$/.test(username))return json({error:'Use 3–24 letters, numbers or underscores for your username.'},400);
  if(typeof password!=='string'||password.length<7||password.length>128)return json({error:'Use a password with 7–128 characters.'},400);
  if(await limited(req,'register'))return json({error:'Too many sign-up attempts. Try again in 15 minutes.'},429);
+ const referralName=typeof b.referrer==='string'?b.referrer.trim().replace(/^@/,'').toLowerCase():'';let inviter:{user_id:string;username:string}|null=null;if(referralName){if(!/^[a-z0-9_]{3,24}$/.test(referralName))return json({error:'Enter a valid referrer username, or leave it blank.'},400);inviter=await env.DB!.prepare('SELECT user_id,username FROM arcade_accounts WHERE username=?').bind(referralName).first<{user_id:string;username:string}>();if(!inviter||referralName===username)return json({error:'Referrer not found. Check the username or leave it blank.'},400)}
  const existing=await env.DB!.prepare('SELECT user_id FROM arcade_accounts WHERE username=?').bind(username).first();if(existing)return json({error:'That username is taken. Choose another.'},409);
  const userId='arcade:'+crypto.randomUUID(),salt=randomHex(16),hash=await passwordHash(password,salt),now=Date.now(),token=randomHex(),recoveryCode=randomHex(24),recoveryHash=await digest(recoveryCode);
  try{await env.DB!.batch([
  env.DB!.prepare('INSERT INTO arcade_accounts(user_id,username,password_hash,salt,created_at) VALUES(?,?,?,?,?)').bind(userId,username,hash,salt,now),
  env.DB!.prepare('INSERT INTO password_recovery(user_id,backup_hash,updated_at) VALUES(?,?,?)').bind(userId,recoveryHash,now),
  env.DB!.prepare('INSERT INTO players(user_id,name,created_at) VALUES(?,?,?)').bind(userId,b.username.trim(),now),
- env.DB!.prepare('INSERT INTO account_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await digest(token),userId,now+(githubClient(req)?GITHUB_SESSION_TTL:ACCOUNT_TTL)*1000)
+ env.DB!.prepare('INSERT INTO account_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await digest(token),userId,now+sessionDuration(b.remember)*1000),
+ ...(inviter?[env.DB!.prepare('INSERT OR IGNORE INTO market_wallets VALUES(?,0)').bind(inviter.user_id),env.DB!.prepare('INSERT INTO referrals VALUES(?,?,?)').bind(userId,inviter.user_id,now),env.DB!.prepare('INSERT INTO market_ledger VALUES(?,?,?,?,?,?)').bind('referral:'+userId,inviter.user_id,1500,'referral','Referred @'+username,now)]:[])
  ])}catch(error){if(String(error).includes('UNIQUE'))return json({error:'That username is taken. Choose another.'},409);throw error}
- if(githubClient(req))return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-'),token,expiresAt:now+GITHUB_SESSION_TTL*1000},201);
- return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-')},201,{'Set-Cookie':sessionCookie(req,token)});
+ if(githubClient(req))return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-'),token,remember:b.remember===true,expiresAt:now+sessionDuration(b.remember)*1000},201);
+ return json({ok:true,recoveryCode:recoveryCode.match(/.{8}/g)!.join('-')},201,{'Set-Cookie':sessionCookie(req,token,sessionDuration(b.remember),b.remember===true)});
 }
 
 return {POST};})(),
@@ -109,9 +112,9 @@ async function POST(req:Request){
  const hash=await passwordHash(b.password,account?.salt||'00000000000000000000000000000000');if(!account||!equal(hash,account.password_hash))return json({error:'Incorrect username or password.'},401);
  const token=randomHex(),now=Date.now(),old=tokenFrom(req);if(old)await env.DB!.prepare('DELETE FROM account_tokens WHERE token_hash=?').bind(await digest(old)).run();
  await env.DB!.prepare('DELETE FROM account_tokens WHERE expires_at<=?').bind(now).run();
- await env.DB!.prepare('INSERT INTO account_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await digest(token),account.user_id,now+(githubClient(req)?GITHUB_SESSION_TTL:ACCOUNT_TTL)*1000).run();
- if(githubClient(req))return json({ok:true,token,expiresAt:now+GITHUB_SESSION_TTL*1000},200);
- return json({ok:true},200,{'Set-Cookie':sessionCookie(req,token)});
+ await env.DB!.prepare('INSERT INTO account_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)').bind(await digest(token),account.user_id,now+sessionDuration(b.remember)*1000).run();
+ if(githubClient(req))return json({ok:true,token,remember:b.remember===true,expiresAt:now+sessionDuration(b.remember)*1000},200);
+ return json({ok:true},200,{'Set-Cookie':sessionCookie(req,token,sessionDuration(b.remember),b.remember===true)});
 }
 
 return {POST};})(),
@@ -287,8 +290,9 @@ return {GET};})(),
 
 
 
-async function GET(req:Request){const u=await getAccount(req);if(!u)return json({error:'Sign in to an administrator account.'},401);if(!isAdmin(u))return json({error:'Administrator access required.'},403);const history=await env.DB!.prepare("SELECT a.username,l.delta AS amount,l.detail,l.created FROM market_ledger l JOIN arcade_accounts a ON a.user_id=l.user_id WHERE l.kind='admin-grant' ORDER BY l.created DESC,l.id DESC LIMIT 50").all();return json({history:history.results})}
-async function POST(req:Request){if(!sameOrigin(req))return json({error:'Invalid origin.'},403);const u=await getAccount(req);if(!u)return json({error:'Sign in to an administrator account.'},401);if(!isAdmin(u))return json({error:'Only the configured administrator can grant coins.'},403);if(await limited(req,'admin-coins',u.userId))return json({error:'Too many grants. Try again later.'},429);const b=await parseBody(req);if(!b||!Number.isSafeInteger(b.amount)||b.amount<1||b.amount>100000||typeof b.reason!=='string'||!b.reason.trim()||b.reason.trim().length>120||typeof b.requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.requestId))return json({error:'Enter 1–100,000 whole coins and a reason of 1–120 characters.'},400);const t=await accountByName(b.username);if(!t||t.userId===u.userId)return json({error:'Enter another player’s exact username.'},400);await walletReady(t.userId);try{await env.DB!.prepare('INSERT INTO market_ledger VALUES(?,?,?,?,?,?)').bind('admin-grant:'+u.userId+':'+b.requestId,t.userId,b.amount,'admin-grant','@'+u.username+': '+b.reason.trim(),Date.now()).run()}catch{return json({error:'Grant not completed. It may already have been sent or the wallet limit was reached.'},409)}return json({ok:true,username:t.username,amount:b.amount})}
+const recipientName=(value:unknown)=>typeof value==='string'?value.trim().replace(/^@/,'').toLowerCase():'';
+async function GET(req:Request){const u=await getAccount(req);if(!u)return json({error:'Sign in to an administrator account.'},401);if(!isAdmin(u))return json({error:'Administrator access required.'},403);const name=new URL(req.url).searchParams.get('username');if(name!==null){const t=await accountByName(recipientName(name));if(!t)return json({error:'Player not found. Use their arcade username, not their display name.'},404);const wallet=await env.DB!.prepare('SELECT coins FROM market_wallets WHERE user_id=?').bind(t.userId).first<{coins:number}>();return json({username:t.username,balance:wallet?.coins||0})}const history=await env.DB!.prepare("SELECT a.username,l.delta AS amount,l.detail,l.created FROM market_ledger l JOIN arcade_accounts a ON a.user_id=l.user_id WHERE l.kind='admin-grant' ORDER BY l.created DESC,l.id DESC LIMIT 50").all();return json({history:history.results})}
+async function POST(req:Request){if(!sameOrigin(req))return json({error:'Invalid origin.'},403);const u=await getAccount(req);if(!u)return json({error:'Sign in to an administrator account.'},401);if(!isAdmin(u))return json({error:'Only the configured administrator can grant coins.'},403);if(await limited(req,'admin-coins',u.userId))return json({error:'Too many grants. Try again later.'},429);const b=await parseBody(req);if(!b)return json({error:'Invalid grant request.'},400);if(!Number.isSafeInteger(b.amount)||b.amount<1||b.amount>100000)return json({error:'Grant 1–100,000 whole coins at a time.'},400);if(typeof b.reason!=='string'||!b.reason.trim()||b.reason.trim().length>120)return json({error:'Add a reason of 1–120 characters.'},400);if(typeof b.requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.requestId))return json({error:'The grant ID is invalid. Close this form, reload the page and try again.'},400);const t=await accountByName(recipientName(b.username));if(!t)return json({error:'Player not found. Use their arcade username, not their display name.'},404);const db=env.DB!,id='admin-grant:'+u.userId+':'+b.requestId,detail='@'+u.username+': '+b.reason.trim();const prior=async()=>db.prepare('SELECT user_id,delta,detail FROM market_ledger WHERE id=?').bind(id).first<{user_id:string;delta:number;detail:string}>();const result=async(replayed=false)=>{const wallet=await db.prepare('SELECT coins FROM market_wallets WHERE user_id=?').bind(t.userId).first<{coins:number}>();return json({ok:true,username:t.username,amount:b.amount,balance:wallet?.coins||0,replayed})};const matches=(row:any)=>row&&row.user_id===t.userId&&row.delta===b.amount&&row.detail===detail;const previous=await prior();if(previous)return matches(previous)?result(true):json({error:'This grant ID was already used for different details. Close the form and start a new grant.'},409);await walletReady(t.userId);try{await db.prepare('INSERT INTO market_ledger VALUES(?,?,?,?,?,?)').bind(id,t.userId,b.amount,'admin-grant',detail,Date.now()).run()}catch{const replay=await prior();if(matches(replay))return result(true);return json({error:'Grant not completed. Check whether the wallet has reached its coin limit.'},409)}return result()}
 
 return {GET,POST};})(),
 "/api/activity":(()=>{
@@ -378,6 +382,12 @@ if(b.action==='assign'){await db.prepare('INSERT OR IGNORE INTO member_roles VAL
 if(b.action==='remove'){await db.prepare('DELETE FROM member_roles WHERE user_id=? AND role=?').bind(t.userId,b.id).run();return json({ok:true})}return json({error:'Unknown action.'},400)}
 
 return {GET,POST};})(),
+"/api/referrals":(()=>{
+
+
+async function GET(req:Request){const u=await getAccount(req);if(!u)return json({error:'Sign in to view your referral link.'},401);const db=env.DB!;const [total,recent]=await Promise.all([db.prepare('SELECT COUNT(*) AS count FROM referrals WHERE referrer=?').bind(u.userId).first<{count:number}>(),db.prepare('SELECT a.username,r.created FROM referrals r JOIN arcade_accounts a ON a.user_id=r.referred_user WHERE r.referrer=? ORDER BY r.created DESC LIMIT 20').bind(u.userId).all()]);return json({username:u.username,reward:1500,count:total?.count||0,earned:(total?.count||0)*1500,recent:recent.results})}
+
+return {GET};})(),
 };
 const endpoint=new URL(request.url).pathname,github=request.headers.get('origin')===GITHUB_ORIGIN;
 if(github&&request.method==='OPTIONS')return new Response(null,{status:204,headers:corsHeaders()});
