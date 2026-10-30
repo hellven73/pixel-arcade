@@ -278,12 +278,12 @@
     "cat": "Original collection",
     "glyph": "\u25a6",
     "color": "#467c75",
-    "cover": "https://katsugachi.github.io/Solus-MS/slope.jpg",
-    "embed": "https://katsugachi.github.io/Solus-MS/Slope.html",
-    "external": true,
-    "source": "Solus MS \u00b7 katsugachi",
-    "providerLaunch": true,
-    "help": "Opens at the original provider in a normal tab. This port does not support the blank-tab player. Availability depends on the provider."
+    "cover": "./slope-cover.png",
+    "embed": "./slope.html",
+    "external": false,
+    "source": "Slope / Y8 \u00b7 web build supplied via slope-pro",
+    "providerLaunch": false,
+    "help": "Hosted on Pixel Arcade. Press Load Slope, then use the game\u2019s Play button. Steer with the arrow keys or A/D. About 30 MB on first load; requires WebGL."
   },
   {
     "id": "original-22",

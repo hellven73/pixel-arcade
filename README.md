@@ -72,3 +72,7 @@ Expanded study release: full-screen Start here; scroll-to-end Terms notice gate;
 
 ## Game launcher update
 Solus collection entries open on their original provider in a normal tab; external provider tabs cannot contribute measurable playtime. Reactor Memory is an original single-player fan task, not the official multiplayer Among Us. Reversi supports two players on the same device. These two new games are not yet included in account playtime totals. Run `node table-games.test.mjs` to check both games.
+
+Slope now loads its Unity build from this repository through slope.html. The first load is approximately 30 MB. See SLOPE-SOURCE.md for provenance and optional publisher-service dependencies. Copied embed URLs now preserve the GitHub Pages repository path.
+
+Google AdSense: publisher ca-pub-8632851454203675 is loaded asynchronously once in the head of all seven HTML pages, including the standalone games. Auto ads must also be enabled for the site in AdSense; adding the snippet does not verify approval or guarantee ad delivery.
